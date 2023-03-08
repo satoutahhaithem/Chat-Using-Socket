@@ -5,59 +5,80 @@ import java.io.PrintWriter;
 import java.net.Socket;
 import java.util.ArrayList;
 
-public class ClientHandler extends Thread {
-
+public class ClientHandler implements Runnable {
     private Socket clientSocket;
-    private BufferedReader input;
-    private PrintWriter output;
+    private BufferedReader in;
+    private PrintWriter out;
     private ArrayList<ClientHandler> clients;
+    private int clientNumber;
     private String clientName;
 
-    public ClientHandler(Socket socket, ArrayList<ClientHandler> clients) {
+    public ClientHandler(Socket socket, ArrayList<ClientHandler> clients, int clientNumber) {
         this.clientSocket = socket;
         this.clients = clients;
-        this.clientName = "Client " + (clients.size() + 1);
+        this.clientNumber = clientNumber;
+    }
 
-        try {
-            this.input = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-            this.output = new PrintWriter(clientSocket.getOutputStream(), true);
-        } catch (IOException ex) {
-            System.out.println("Error getting input/output streams: " + ex.getMessage());
-        }
+    public void sendMessage(String message) {
+        out.println(message);
     }
 
     public String getClientName() {
         return clientName;
     }
 
-    public void sendMessage(String message) {
-        for (ClientHandler client : clients) {
-            if (client != this) {
-                client.output.println(clientName + ": " + message);
-            }
-        }
-    }
-
     @Override
     public void run() {
         try {
-            output.println("Enter your name:");
-            clientName = input.readLine();
-            output.println("Welcome, " + clientName + "!");
+            in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+            out = new PrintWriter(clientSocket.getOutputStream(), true);
+            // Ask for client name
+            out.println("Enter your name:");
+            clientName = in.readLine();
+            out.println("Welcome, " + clientName + "!");
+            System.out.println(clientName + " has joined the chat.");
 
-            while (true) {
-                String message = input.readLine();
-                if (message == null) {
-                    break;
+            // Send notification to all clients that a new client has joined
+            for (ClientHandler client : clients) {
+                if (client != this) {
+                    client.sendMessage(clientName + " has joined the chat.");
                 }
-                sendMessage(message);
             }
 
-            input.close();
-            output.close();
+            // Listen for messages from the client
+            String inputLine;
+            while ((inputLine = in.readLine()) != null) {
+                if (inputLine.equalsIgnoreCase("exit")) {
+                    break;
+                }
+
+                // Send the message to all clients except the sender
+                for (ClientHandler client : clients) {
+                    if (client != this) {
+                        client.sendMessage(clientName + ": " + inputLine);
+                    }
+                }
+            }
+
+            // Send notification to all clients that the client has left
+            for (ClientHandler client : clients) {
+                if (client != this) {
+                    client.sendMessage(clientName + " has left the chat.");
+                }
+            }
+
+            // Remove the client handler from the list of clients
+            clients.remove(this);
+
+            // Close the socket and streams
+            out.close();
+            in.close();
             clientSocket.close();
-        } catch (IOException ex) {
-            System.out.println("Error handling client " + clientName + ": " + ex.getMessage());
+
+            System.out.println(clientName + " hasleft the chat.");
+        } catch (IOException e) {
+            System.out.println("Error in clientHandler: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 }

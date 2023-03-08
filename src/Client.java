@@ -3,68 +3,80 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.util.Scanner;
 
 public class Client {
     private Socket socket;
-    private BufferedReader input;
-    private PrintWriter output;
+    private BufferedReader in;
+    private PrintWriter out;
 
-    public void start(String serverAddress, int port) {
-        try {
-            socket = new Socket(serverAddress, port);
-            input = new BufferedReader(new InputStreamReader(System.in));
-            output = new PrintWriter(socket.getOutputStream(), true);
+    public void startConnection(String ip, int port) throws IOException {
+        socket = new Socket(ip, port);
+        in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+        out = new PrintWriter(socket.getOutputStream(), true);
+    }
 
-            System.out.println("Connected to server on port " + port);
-            System.out.println("Enter your name:");
+    public void sendMessage(String message) {
+        out.println(message);
+    }
 
-            String name = input.readLine();
-            output.println(name);
+    public String receiveMessage() throws IOException {
+        return in.readLine();
+    }
 
-            ClientThread clientThread = new ClientThread(socket);
-            clientThread.start();
-
-            String message;
-            while ((message = input.readLine()) != null) {
-                output.println(message);
-            }
-
-            output.close();
-            input.close();
-            socket.close();
-        } catch (IOException ex) {
-            System.out.println("Client exception: " + ex.getMessage());
-        }
+    public void stopConnection() throws IOException {
+        out.close();
+        in.close();
+        socket.close();
     }
 
     public static void main(String[] args) {
-        String serverAddress = "localhost";
-        int port = 6000;
         Client client = new Client();
-        client.start(serverAddress, port);
-    }
 
-    private class ClientThread extends Thread {
-        private Socket socket;
+        Scanner scanner = new Scanner(System.in);
+        String name = "";
 
-        public ClientThread(Socket socket) {
-            this.socket = socket;
-        }
+        try {
+            String ip = "localhost";
+            int port = 6000;
 
-        @Override
-        public void run() {
-            try {
-                BufferedReader input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            client.startConnection(ip, port);
+            System.out.println(client.receiveMessage());
 
-                String message;
-                while ((message = input.readLine()) != null) {
-                    System.out.println(message);
+            while (!name.equals("exit")) {
+                //System.out.println("Enter your name: ");
+                name = scanner.next();
+
+                if (!name.equals("exit")) {
+                    client.sendMessage(name);
+                    System.out.println(client.receiveMessage());
+
+                    // Listen for messages from the server
+                    new Thread(() -> {
+                        try {
+                            String serverMessage;
+                            while ((serverMessage = client.receiveMessage()) != null) {
+                                System.out.println(serverMessage);
+                            }
+                        } catch (IOException e) {
+                            System.err.println("Error receiving message from server: " + e.getMessage());
+                        }
+                    }).start();
+
+                    // Send messages to the server
+                    String clientMessage;
+                    do {
+                        System.out.print("> ");
+                        clientMessage = scanner.nextLine();
+                        client.sendMessage(clientMessage);
+                    } while (!clientMessage.equalsIgnoreCase("exit"));
+
+                    client.stopConnection();
+                    System.exit(0);
                 }
-
-                input.close();
-            } catch (IOException ex) {
-                System.out.println("ClientThread exception: " + ex.getMessage());
             }
+        } catch (IOException e) {
+            System.err.println("Error connecting to server: " + e.getMessage());
         }
     }
 }

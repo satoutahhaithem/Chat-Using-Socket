@@ -4,35 +4,32 @@ import java.net.Socket;
 import java.util.ArrayList;
 
 public class Server {
+
     private ServerSocket serverSocket;
-    private ArrayList<ClientHandler> clients;
-    private int clientNumber = 1;
+    private ArrayList<ClientHandler> clients = new ArrayList<>();
 
     public void start(int port) {
-        clients = new ArrayList<>();
-
         try {
             serverSocket = new ServerSocket(port);
             System.out.println("Server started on port " + port);
 
+            int clientNumber = 0;
             while (true) {
+                System.out.println("Waiting for client connection...");
                 Socket clientSocket = serverSocket.accept();
-                System.out.println("Client " + clientNumber + " connected.");
-                ClientHandler clientHandler = new ClientHandler(clientSocket, clients);
+                System.out.println("Client connected: " + clientSocket);
+
+                ClientHandler clientHandler = new ClientHandler(clientSocket, clients, clientNumber);
                 clients.add(clientHandler);
-                clientHandler.start();
+
+                Thread thread = new Thread(clientHandler);
+                thread.start();
+
                 clientNumber++;
             }
-        } catch (IOException ex) {
-            System.out.println("Server exception: " + ex.getMessage());
-        }
-    }
 
-    private void broadcast(String message, ClientHandler sender) {
-        for (ClientHandler client : clients) {
-            if (client != sender) {
-                client.sendMessage(sender.getClientName() + ": " + message);
-            }
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 
